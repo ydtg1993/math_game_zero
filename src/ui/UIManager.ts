@@ -114,7 +114,18 @@ export class UIManager {
         this.updateEquationHTML(eq, false);
         this.sound.play('click');
 
-        await this.animCtrl.playEquationDemo(eq, this.renderer.getElement('#fruitDisplay'), this.sound, (msg) => this.feedback(msg));
+        // 判断是否使用竖式演示
+        const useVertical =
+            (this.currentStrategy?.id === 2) ||   // 高级
+            (this.currentStrategy?.id === 4) ||   // 乘除进阶
+            (this.currentStrategy?.id === 5) ||   // 四则
+            (this.currentStrategy?.id === 3 && (eq.a! > 10 || eq.b! > 10 || eq.result > 20)); // 乘法入门条件
+
+        if (useVertical) {
+            await this.animCtrl.playVerticalDemo(eq, this.renderer.getElement('#fruitDisplay'), this.sound);
+        } else {
+            await this.animCtrl.playEquationDemo(eq, this.renderer.getElement('#fruitDisplay'), this.sound, (msg) => this.feedback(msg));
+        }
 
         this.updateEquationHTML(eq, true);
         this.feedback(`🎉 答案是 ${eq.result}！`, true);

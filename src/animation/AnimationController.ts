@@ -114,6 +114,107 @@ export class AnimationController {
         await sleep(300);
     }
 
+
+    async playVerticalDemo(eq: Equation, container: HTMLElement, sound: SoundManager): Promise<void> {
+        container.innerHTML = '';
+        const emoji = this.currentEmoji;
+        const isAnimal = this.isAnimalTheme();
+
+        // 创建一个包装容器
+        const wrapper = document.createElement('div');
+        wrapper.style.display = 'flex';
+        wrapper.style.flexDirection = 'column';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.gap = '8px';
+        container.appendChild(wrapper);
+
+        // 图标展示行
+        const iconRow = document.createElement('div');
+        iconRow.style.display = 'flex';
+        iconRow.style.flexWrap = 'wrap';
+        iconRow.style.justifyContent = 'center';
+        iconRow.style.gap = '4px';
+        wrapper.appendChild(iconRow);
+
+        // 竖式显示行
+        const verticalDiv = document.createElement('div');
+        verticalDiv.style.fontFamily = 'monospace';
+        verticalDiv.style.fontSize = '1.8rem';
+        verticalDiv.style.lineHeight = '1.4';
+        verticalDiv.style.textAlign = 'center';
+        verticalDiv.style.background = '#fff9e6';
+        verticalDiv.style.padding = '10px 20px';
+        verticalDiv.style.borderRadius = '12px';
+        verticalDiv.style.border = '2px dashed #f0ad4e';
+        wrapper.appendChild(verticalDiv);
+
+        // 根据类型构建竖式文本
+        let verticalText: string;
+        if (eq.type === 'mixed') {
+            // 混合运算直接展示表达式和等号
+            verticalText = `${eq.expr} = ?`;
+        } else {
+            // 加减乘除：构建竖式
+            const a = eq.a!;
+            const b = eq.b!;
+            const op = eq.op!;
+            verticalText = this.buildVerticalText(a, b, op);
+        }
+        verticalDiv.innerText = verticalText;
+
+        // 分段显示图标（根据结果和类型）
+        const total = eq.result;
+        const maxIconsPerRow = 15;
+        const rows = Math.ceil(total / maxIconsPerRow);
+        // 先清除原有图标
+        const renderIcons = async () => {
+            iconRow.innerHTML = '';
+            for (let i = 0; i < Math.min(total, 40); i++) {
+                const span = document.createElement('span');
+                span.className = isAnimal ? 'animal-item' : 'fruit-item';
+                span.textContent = emoji;
+                iconRow.appendChild(span);
+                sound.play('fruitAppear');
+                await sleep(50);
+            }
+            if (total > 40) {
+                const moreSpan = document.createElement('span');
+                moreSpan.textContent = `… ×${total}`;
+                moreSpan.style.fontSize = '1.5rem';
+                moreSpan.style.alignSelf = 'center';
+                iconRow.appendChild(moreSpan);
+            }
+        };
+
+        await renderIcons();
+        await sleep(800);
+
+        // 显示答案
+        verticalDiv.innerHTML = verticalText.replace('?', `<span style="color:var(--pink); font-size:2.2rem;">${eq.result}</span>`);
+        sound.play('correct');
+        await sleep(300);
+    }
+
+// 辅助：构建竖式文本（用于加减乘除）
+    private buildVerticalText(a: number, b: number, op: string): string {
+        // 简单的竖式表达
+        const aStr = a.toString();
+        const bStr = b.toString();
+        const maxLen = Math.max(aStr.length, bStr.length + (op === '×' || op === '÷' ? 1 : 0));
+        const line = '─'.repeat(maxLen + 2);
+        switch (op) {
+            case '+':
+            case '−':
+                return `  ${aStr.padStart(maxLen)}\n${op} ${bStr.padStart(maxLen - 1)}\n${line}\n  ?`;
+            case '×':
+                return `  ${aStr.padStart(maxLen)}\n${op} ${bStr.padStart(maxLen - 2)}\n${line}\n  ?`;
+            case '÷':
+                return `  ${aStr.padStart(maxLen)}\n${op} ${bStr.padStart(maxLen - 2)}\n${line}\n  ?`;
+            default:
+                return `${a} ${op} ${b} = ?`;
+        }
+    }
+
     renderEmojis(count: number, container: HTMLElement, emoji: string): void {
         container.innerHTML = '';
         const maxShow = 30;
