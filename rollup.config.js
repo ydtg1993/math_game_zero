@@ -7,7 +7,7 @@ export default {
         dir: 'dist',
         format: 'es',                     // 输出 ES 模块，与 script type="module" 兼容
         entryFileNames: 'index.js',
-        preserveModules: true,            // 保持原有文件结构
+        //preserveModules: true,            // 保持原有文件结构
         preserveModulesRoot: 'src',
     },
     plugins: [

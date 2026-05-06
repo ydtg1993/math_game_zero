@@ -113,7 +113,7 @@ export class UIManager {
         this.animCtrl.randomEmoji();
         this.updateEquationHTML(eq, false);
         this.sound.play('click');
-
+        this.sound.speakEquation(eq);
         // 判断是否使用竖式演示
         const useVertical =
             (this.currentStrategy?.id === 2) ||   // 高级
@@ -168,6 +168,9 @@ export class UIManager {
         this.renderer.setStyle('#btnNewQuiz', { display: 'flex' });
         this.renderer.setStyle('#btnDemo', { display: 'flex' });
         this.feedback('🤔 想一想，答案是多少呢？');
+        if (eq.type !== 'mixed') {
+            this.sound.speakEquation(eq);
+        }
     }
 
     private async startCounting(): Promise<void> {
@@ -188,6 +191,7 @@ export class UIManager {
         this.countingAnswer = problem.answer;
         await this.animCtrl.playCountingAnimation(problem, sceneArea, this.sound);
         this.renderer.setHTML('#equationDisplay', `<span style="font-size:1.5rem;">${problem.question}</span>`);
+        this.sound.speakText(problem.question);
         const totalAnimals = problem.finalAnimals.reduce((sum, a) => sum + a.count, 0);
         const options = OptionGenerator.generate({ correct: problem.answer, maxValue: totalAnimals + 10, count: 4 });
         this.renderOptions(options);
@@ -228,7 +232,9 @@ export class UIManager {
             this.addStars(points);
             this.combo++;
             const msgs = ['太棒了！🎉', '答对啦！🌟', '非常好！👍'];
-            this.feedback(this.combo >= 3 ? `🔥 ${this.combo}连击！` : msgs[Math.floor(Math.random() * msgs.length)], true);
+            const msg = msgs[Math.floor(Math.random() * msgs.length)];
+            this.sound.speakText(msg);
+            this.feedback(this.combo >= 3 ? `🔥 ${this.combo}连击！` : msg, true);
             this.confetti.spawn(18);
             this.sound.play('confetti');
         } else {
@@ -237,6 +243,7 @@ export class UIManager {
             this.combo = 0;
             const points = this.scoreCalc.getWrongPoints();
             this.addStars(points);
+            this.sound.speakText(`再想想哦，扣了${-points}分`);
             this.feedback(`再想想哦，扣了${-points}分 😢`);
             clickedBtn.style.pointerEvents = 'none';
             setTimeout(() => {
