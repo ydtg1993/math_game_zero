@@ -5,7 +5,7 @@ export class SoundManager {
     private ctx: AudioContext | null = null;
     private musicTimer: ReturnType<typeof setInterval> | null = null;
     private musicOn = true;
-    private notes = [261.63, 329.63, 392.00, 523.25];
+    private notes = [261.63, 329.63, 392.00, 523.25];   // 最初的四音旋律
     private noteIdx = 0;
 
     // 语音相关
@@ -15,26 +15,28 @@ export class SoundManager {
         this.loadVoices();
     }
 
-    /** 尝试获取一个适合小朋友的中文女声 */
     private loadVoices(): void {
         if (!('speechSynthesis' in window)) return;
 
         const setVoice = () => {
             const voices = speechSynthesis.getVoices();
-            // 按优先级：Microsoft Huihui（Windows）> 包含"女"或"girl"的 zh-CN 声音
-            const preferred = voices.find(
-                v =>
-                    v.lang === 'zh-CN' &&
-                    (v.name.includes('Huihui') ||
-                        v.name.includes('女') ||
-                        v.name.includes('girl'))
-            );
+            let preferred = voices.find(v => v.lang === 'zh-CN' && v.name.includes('小北'));
+            if (!preferred) {
+                preferred = voices.find(v => v.lang === 'zh-CN' && v.name.includes('Tingting'));
+            }
+            if (!preferred) {
+                preferred = voices.find(
+                    v =>
+                        v.lang === 'zh-CN' &&
+                        (v.name.includes('女') || v.name.includes('girl'))
+                );
+            }
             if (preferred) {
                 this.preferredVoice = preferred;
+                console.log(`🎙️ 使用语音: ${preferred.name}`);
             }
         };
 
-        // 首次获取，如果没有则等 voiceschanged 事件
         if (speechSynthesis.getVoices().length) {
             setVoice();
         } else {
@@ -78,12 +80,13 @@ export class SoundManager {
         }
     }
 
+    /** 最初版轻快背景音乐 */
     startBgMusic(): void {
         this.stopBgMusic();
         this.noteIdx = 0;
         this.musicTimer = setInterval(() => {
             if (this.musicOn) {
-                this.tone(this.notes[this.noteIdx % this.notes.length], 0.25, 'sine', 0.08);
+                this.tone(this.notes[this.noteIdx % this.notes.length], 0.25, 'sine', 0.08, true);
                 this.noteIdx++;
             }
         }, 480);
@@ -128,14 +131,13 @@ export class SoundManager {
         this.speak(text);
     }
 
-    /** 温和可爱的中文朗读 */
     private speak(text: string): void {
         if (!text || !('speechSynthesis' in window)) return;
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'zh-CN';
-        utterance.rate = 0.75;   // 更慢，更温柔
-        utterance.pitch = 1.4;   // 稍尖细，像小朋友的声音
+        utterance.rate = 0.75;
+        utterance.pitch = 1.4;
         if (this.preferredVoice) {
             utterance.voice = this.preferredVoice;
         }
