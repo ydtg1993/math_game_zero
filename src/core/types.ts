@@ -30,4 +30,4 @@ export type SoundName = 'click' | 'fruitAppear' | 'fruitDisappear' | 'correct' |
 export type TabMode = 'demo' | 'quiz' | 'counting';
 
 // 等级ID
-export type LevelId = 0 | 1 | 2 | 3 | 4 | 5;
+export type LevelId = 0 | 1 | 2 | 3 | 4 | 5 | 6;

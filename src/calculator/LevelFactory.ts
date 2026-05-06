@@ -6,14 +6,16 @@ import { MultiplicationLevel } from '../levels/MultiplicationLevel';
 import { MultiplicationAdvLevel } from '../levels/MultiplicationAdvLevel';
 import { MixedLevel } from '../levels/MixedLevel';
 import { LevelId } from '../core/types';
+import {EnlightenmentLevel} from "../levels/EnlightenmentLevel";
 
 const strategies: LevelStrategy[] = [
-    new FunMathLevel(),       // 0 - 趣味数学
-    new PrimaryLevel(),       // 1 - 初级
-    new AdvancedLevel(),      // 2 - 高级
-    new MultiplicationLevel(),// 3 - 乘法入门
-    new MultiplicationAdvLevel(), // 4 - 乘除进阶
-    new MixedLevel(),         // 5 - 四则运算
+    new FunMathLevel(),             // 0 - 趣味数学
+    new EnlightenmentLevel(),       // 1 - 启蒙
+    new PrimaryLevel(),             // 2 - 初级
+    new AdvancedLevel(),            // 3 - 高级
+    new MultiplicationLevel(),      // 4 - 乘法入门
+    new MultiplicationAdvLevel(),   // 5 - 乘除进阶
+    new MixedLevel(),               // 6 - 四则运算
 ];
 
 export function getLevelStrategy(levelId: LevelId): LevelStrategy {
