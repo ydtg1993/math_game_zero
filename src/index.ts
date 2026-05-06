@@ -1,8 +1,7 @@
 import { SoundManager } from './audio/SoundManager';
 import { UIManager } from './ui/UIManager';
-import { LevelId, TabMode } from './core/types';
+import { LevelId} from './core/types';
 import { getLevelStrategy } from './calculator/LevelFactory';
-import { ConfettiAnimator } from './animation/ConfettiAnimator';
 
 const sound = new SoundManager();
 const ui = new UIManager(document, document.getElementById('confettiContainer')!, sound);
@@ -36,7 +35,7 @@ document.getElementById('btnDemo')!.addEventListener('click', () => ui.startDemo
 
 // 出新题目按钮
 document.getElementById('btnNewQuiz')!.addEventListener('click', () => {
-    if (ui['currentMode'] === 'quiz') ui.startQuiz(); // 此处临时访问，建议后续在 UIManager 中暴露 public 方法
+    ui.handleNewQuizButton();  // 安全调用
 });
 
 // 吉祥物点击
@@ -47,9 +46,7 @@ document.getElementById('mascotEmoji')!.addEventListener('click', () => {
     el.textContent = msgs[Math.floor(Math.random() * msgs.length)];
     el.className = 'feedback celebrate';
     if (Math.random() < 0.3) {
-        sound.play('confetti');
-        const confetti = new ConfettiAnimator(document.getElementById('confettiContainer')!);
-        confetti.spawn(8);
+        ui.spawnConfetti(8);
     }
 });
 

@@ -1,5 +1,5 @@
 import { Renderer } from './Renderer';
-import { Equation, TabMode, LevelId } from '../core/types';
+import { Equation, TabMode } from '../core/types';
 import { LevelStrategy } from '../levels/LevelStrategy';
 import { OptionGenerator } from '../calculator/OptionGenerator';
 import { EquationGenerator } from '../calculator/EquationGenerator';
@@ -20,6 +20,9 @@ export class UIManager {
     private scoreCalc: ScoreCalculator;
     private eqGenerator?: EquationGenerator;
     private countingGen?: CountingGenerator;
+
+    // 新增：保存当前等级策略引用，避免访问私有属性
+    private currentStrategy?: LevelStrategy;
 
     private currentMode: TabMode = 'demo';
     private isDemoPlaying = false;
@@ -44,11 +47,12 @@ export class UIManager {
         this.sound = soundMgr;
         this.animCtrl = new AnimationController();
         this.confetti = new ConfettiAnimator(confettiContainer);
-        this.rewardSystem = new RewardSystem([5,10,15,20,30,50], soundMgr, this.confetti);
+        this.rewardSystem = new RewardSystem([5, 10, 15, 20, 30, 50], soundMgr, this.confetti);
         this.scoreCalc = new ScoreCalculator(1, 1);
     }
 
     setLevelStrategy(strategy: LevelStrategy): void {
+        this.currentStrategy = strategy; // 保存引用
         this.eqGenerator = new EquationGenerator(strategy);
         this.countingGen = new CountingGenerator(strategy.getCountingMax());
         this.scoreCalc = new ScoreCalculator(strategy.scoreCorrect, strategy.scoreWrong, this.scoreCalc.getStars());
@@ -71,8 +75,7 @@ export class UIManager {
         this.feedback('');
         this.sound.play('click');
 
-        // Tab 高亮
-        ['tabDemo','tabQuiz','tabCounting'].forEach(id => this.renderer.removeClass(`#${id}`, 'active'));
+        ['tabDemo', 'tabQuiz', 'tabCounting'].forEach(id => this.renderer.removeClass(`#${id}`, 'active'));
         if (mode === 'demo') this.renderer.addClass('#tabDemo', 'active');
         else if (mode === 'quiz') this.renderer.addClass('#tabQuiz', 'active');
         else this.renderer.addClass('#tabCounting', 'active');
@@ -118,7 +121,6 @@ export class UIManager {
         this.updateEquationHTML(eq, false);
         this.sound.play('click');
 
-        // 执行动画
         await this.animCtrl.playEquationDemo(eq, fruitDisplay, this.sound, (msg) => this.feedback(msg));
 
         this.updateEquationHTML(eq, true);
@@ -146,8 +148,10 @@ export class UIManager {
         const emoji = this.animCtrl.getCurrentEmoji();
         const fruitDisplay = this.renderer.getElement('#fruitDisplay');
         this.animCtrl.renderEmojis(eq.type === 'mixed' ? 0 : eq.a || 0, fruitDisplay, emoji);
-        const maxVal = Math.max(eq.result + 20, this.scoreCalc.getStars() + 50); // safe upper
-        const options = OptionGenerator.generate({ correct: eq.result, maxValue: maxVal, count: this.eqGenerator['strategy'].getOptionCount?.() || 4 });
+        const maxVal = Math.max(eq.result + 20, this.scoreCalc.getStars() + 50);
+        // 使用保存的 currentStrategy 获取选项数量，避免访问私有属性
+        const optionCount = this.currentStrategy ? this.currentStrategy.getOptionCount() : 4;
+        const options = OptionGenerator.generate({ correct: eq.result, maxValue: maxVal, count: optionCount });
         this.renderOptions(options);
         this.renderer.setStyle('#btnNewQuiz', { display: 'flex' });
         this.renderer.setStyle('#btnDemo', { display: 'none' });
@@ -209,7 +213,7 @@ export class UIManager {
             const points = this.scoreCalc.getCorrectPoints();
             this.addStars(points);
             this.combo++;
-            const msgs = ['太棒了！🎉','答对啦！🌟','非常好！👍'];
+            const msgs = ['太棒了！🎉', '答对啦！🌟', '非常好！👍'];
             this.feedback(this.combo >= 3 ? `🔥 ${this.combo}连击！` : msgs[Math.floor(Math.random() * msgs.length)], true);
             this.confetti.spawn(18);
             this.sound.play('confetti');
@@ -263,7 +267,6 @@ export class UIManager {
         const newStars = this.scoreCalc.addStars(points);
         this.renderer.setText('#starCount', String(newStars));
         this.rewardSystem.checkAndReward(newStars);
-        // 图标变化
         const mascot = this.renderer.getElement('#mascotEmoji');
         if (newStars >= 20) mascot.textContent = '🏆';
         else if (newStars >= 10) mascot.textContent = '🐼';
@@ -272,5 +275,20 @@ export class UIManager {
     resetDemo(): void {
         this.renderer.setHTML('#fruitDisplay', '👆 点击按钮开始');
         this.renderer.setHTML('#equationDisplay', '<span>准备开始 🎈</span>');
+    }
+
+    // 公共方法：安全处理“出新题目”按钮点击，自动根据当前模式调用
+    public handleNewQuizButton(): void {
+        if (this.currentMode === 'quiz') {
+            this.startQuiz();
+        } else if (this.currentMode === 'counting') {
+            this.startCounting();
+        }
+    }
+
+    // 公共方法：生成彩纸效果，避免外部重复创建 ConfettiAnimator
+    public spawnConfetti(count: number = 8): void {
+        this.confetti.spawn(count);
+        this.sound.play('confetti');
     }
 }
