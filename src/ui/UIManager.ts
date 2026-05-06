@@ -1,5 +1,5 @@
 import { Renderer } from './Renderer';
-import { Equation, TabMode } from '../core/types';
+import { Equation } from '../core/types';
 import { LevelStrategy } from '../levels/LevelStrategy';
 import { OptionGenerator } from '../calculator/OptionGenerator';
 import { EquationGenerator } from '../calculator/EquationGenerator';
@@ -7,7 +7,7 @@ import { AnimationController } from '../animation/AnimationController';
 import { SoundManager } from '../audio/SoundManager';
 import { ConfettiAnimator } from '../animation/ConfettiAnimator';
 import { RewardSystem } from './RewardSystem';
-import { CountingGenerator } from '../calculator/CountingGenerator';
+import { CountingGenerator, CountingProblem } from '../calculator/CountingGenerator';
 import { ScoreCalculator } from '../calculator/ScoreCalculator';
 import { sleep } from '../utils/helpers';
 
@@ -20,23 +20,23 @@ export class UIManager {
     private scoreCalc: ScoreCalculator;
     private eqGenerator?: EquationGenerator;
     private countingGen?: CountingGenerator;
-
-    // 新增：保存当前等级策略引用，避免访问私有属性
     private currentStrategy?: LevelStrategy;
 
-    private currentMode: TabMode = 'demo';
+    private currentMode: 'quiz' | 'counting' | 'demo' = 'counting';
     private isDemoPlaying = false;
+
     private isQuizActive = false;
     private quizAnswered = false;
     private currentQuizAnswer: number | null = null;
     private currentEquation: Equation | null = null;
     private combo = 0;
 
-    // 数数状态
     private countingActive = false;
     private countingAnswered = false;
     private countingAnswer: number | null = null;
-    private countingProblem: any = null;
+    private countingProblem: CountingProblem | null = null;
+
+    private modeBeforeDemo: 'quiz' | 'counting' | 'demo' | null = null;
 
     constructor(
         private document: Document,
@@ -52,22 +52,16 @@ export class UIManager {
     }
 
     setLevelStrategy(strategy: LevelStrategy): void {
-        this.currentStrategy = strategy; // 保存引用
+        this.currentStrategy = strategy;
         this.eqGenerator = new EquationGenerator(strategy);
-        this.countingGen = new CountingGenerator(strategy.getCountingMax());
+        const countingEmojis = strategy.getCountingEmojis ? strategy.getCountingEmojis() : undefined;
+        this.countingGen = new CountingGenerator(strategy.getCountingMax(), countingEmojis);
         this.scoreCalc = new ScoreCalculator(strategy.scoreCorrect, strategy.scoreWrong, this.scoreCalc.getStars());
-        if (this.currentMode === 'demo') {
-            this.resetDemo();
-        } else if (this.currentMode === 'quiz') {
-            this.startQuiz();
-        } else if (this.currentMode === 'counting') {
-            this.startCounting();
-        }
     }
 
-    switchMode(mode: TabMode): void {
+    enterQuizMode(): void {
         if (this.isDemoPlaying) return;
-        this.currentMode = mode;
+        this.currentMode = 'quiz';
         this.isQuizActive = false;
         this.quizAnswered = false;
         this.countingActive = false;
@@ -75,66 +69,74 @@ export class UIManager {
         this.feedback('');
         this.sound.play('click');
 
-        ['tabDemo', 'tabQuiz', 'tabCounting'].forEach(id => this.renderer.removeClass(`#${id}`, 'active'));
-        if (mode === 'demo') this.renderer.addClass('#tabDemo', 'active');
-        else if (mode === 'quiz') this.renderer.addClass('#tabQuiz', 'active');
-        else this.renderer.addClass('#tabCounting', 'active');
+        this.renderer.setStyle('#fruitDisplay', { display: 'flex' });
+        this.renderer.removeClass('#fruitDisplay', 'demo-active');
+        this.renderer.setStyle('#sceneArea', { display: 'none' });
+        this.renderer.setStyle('#btnDemo', { display: 'flex' });   // 答题模式显示演示按钮
+        this.startQuiz();
+    }
 
-        if (mode === 'demo') {
-            this.renderer.setStyle('#optionsGrid', { display: 'none' });
-            this.renderer.setStyle('#btnNewQuiz', { display: 'none' });
-            this.renderer.setStyle('#btnDemo', { display: 'flex' });
-            this.renderer.setStyle('#fruitDisplay', { display: 'flex' });
-            this.renderer.setStyle('#sceneArea', { display: 'none' });
-            this.renderer.addClass('#fruitDisplay', 'demo-active');
-            this.renderer.setHTML('#fruitDisplay', '👆 点击按钮开始');
-            this.renderer.setHTML('#equationDisplay', '<span>准备开始 🎈</span>');
-        } else if (mode === 'quiz') {
-            this.renderer.setStyle('#fruitDisplay', { display: 'flex' });
-            this.renderer.setStyle('#sceneArea', { display: 'none' });
-            this.renderer.removeClass('#fruitDisplay', 'demo-active');
-            this.startQuiz();
-        } else {
-            this.renderer.setStyle('#fruitDisplay', { display: 'none' });
-            this.renderer.setStyle('#sceneArea', { display: 'flex' });
-            this.renderer.setStyle('#optionsGrid', { display: 'none' });
-            this.renderer.setStyle('#btnNewQuiz', { display: 'none' });
-            this.renderer.setStyle('#btnDemo', { display: 'none' });
-            this.renderer.setHTML('#equationDisplay', '');
-            this.startCounting();
-        }
+    enterCountingMode(): void {
+        if (this.isDemoPlaying) return;
+        this.currentMode = 'counting';
+        this.isQuizActive = false;
+        this.quizAnswered = false;
+        this.countingActive = false;
+        this.countingAnswered = false;
+        this.feedback('');
+        this.sound.play('click');
+
+        this.renderer.setStyle('#fruitDisplay', { display: 'none' });
+        this.renderer.setStyle('#sceneArea', { display: 'flex' });
+        this.renderer.setStyle('#btnDemo', { display: 'none' });   // 计数模式隐藏演示按钮
+        this.startCounting();
     }
 
     async startDemo(): Promise<void> {
         if (this.isDemoPlaying || !this.eqGenerator) return;
+        this.modeBeforeDemo = this.currentMode;
         this.isDemoPlaying = true;
+
         const btnDemo = this.renderer.getElement('#btnDemo');
         this.renderer.setStyle('#btnDemo', { pointerEvents: 'none', opacity: '0.6' });
         btnDemo.textContent = '⏳ 演示中...';
         this.feedback('');
 
+        this.renderer.setStyle('#fruitDisplay', { display: 'flex' });
+        this.renderer.addClass('#fruitDisplay', 'demo-active');
+        this.renderer.setStyle('#sceneArea', { display: 'none' });
+        this.renderer.setStyle('#optionsGrid', { display: 'none' });
+        this.renderer.setStyle('#btnNewQuiz', { display: 'none' });
+
         const eq = this.eqGenerator.generate(true);
         this.currentEquation = eq;
         this.animCtrl.randomEmoji();
-        const fruitDisplay = this.renderer.getElement('#fruitDisplay');
-        this.renderer.addClass('#fruitDisplay', 'demo-active');
         this.updateEquationHTML(eq, false);
         this.sound.play('click');
 
-        await this.animCtrl.playEquationDemo(eq, fruitDisplay, this.sound, (msg) => this.feedback(msg));
+        await this.animCtrl.playEquationDemo(eq, this.renderer.getElement('#fruitDisplay'), this.sound, (msg) => this.feedback(msg));
 
         this.updateEquationHTML(eq, true);
         this.feedback(`🎉 答案是 ${eq.result}！`, true);
         this.sound.play('confetti');
         this.confetti.spawn(15);
         await sleep(2000);
-        btnDemo.textContent = '▶️ 再看一次演示';
+
+        btnDemo.textContent = '▶️ 看演示动画';
         this.renderer.setStyle('#btnDemo', { pointerEvents: 'auto', opacity: '1' });
         this.isDemoPlaying = false;
-        if (this.currentMode === 'demo') this.feedback('💡 切换到答题或趣味数数吧！');
+
+        if (this.modeBeforeDemo === 'quiz') {
+            this.enterQuizMode();
+        } else if (this.modeBeforeDemo === 'counting') {
+            this.enterCountingMode();
+        } else {
+            this.enterCountingMode();
+        }
+        this.modeBeforeDemo = null;
     }
 
-    startQuiz(): void {
+    private startQuiz(): void {
         if (this.isDemoPlaying || !this.eqGenerator) return;
         this.isQuizActive = true;
         this.quizAnswered = false;
@@ -149,16 +151,15 @@ export class UIManager {
         const fruitDisplay = this.renderer.getElement('#fruitDisplay');
         this.animCtrl.renderEmojis(eq.type === 'mixed' ? 0 : eq.a || 0, fruitDisplay, emoji);
         const maxVal = Math.max(eq.result + 20, this.scoreCalc.getStars() + 50);
-        // 使用保存的 currentStrategy 获取选项数量，避免访问私有属性
         const optionCount = this.currentStrategy ? this.currentStrategy.getOptionCount() : 4;
         const options = OptionGenerator.generate({ correct: eq.result, maxValue: maxVal, count: optionCount });
         this.renderOptions(options);
         this.renderer.setStyle('#btnNewQuiz', { display: 'flex' });
-        this.renderer.setStyle('#btnDemo', { display: 'none' });
+        this.renderer.setStyle('#btnDemo', { display: 'flex' });
         this.feedback('🤔 想一想，答案是多少呢？');
     }
 
-    async startCounting(): Promise<void> {
+    private async startCounting(): Promise<void> {
         if (this.isDemoPlaying || !this.countingGen) return;
         this.countingActive = true;
         this.countingAnswered = false;
@@ -166,18 +167,20 @@ export class UIManager {
         const sceneArea = this.renderer.getElement('#sceneArea');
         this.renderer.setStyle('#sceneArea', { display: 'flex' });
         this.renderer.setStyle('#fruitDisplay', { display: 'none' });
-        this.renderer.setStyle('#btnDemo', { display: 'none' });
+        this.renderer.setStyle('#optionsGrid', { display: 'none' });
         this.renderer.setStyle('#btnNewQuiz', { display: 'none' });
+        this.renderer.setStyle('#btnDemo', { display: 'none' });
         this.renderer.setHTML('#equationDisplay', '');
 
-        const emoji = this.animCtrl.randomEmoji();
-        const problem = this.countingGen.generate(emoji);
+        const problem = this.countingGen.generate();
         this.countingProblem = problem;
         this.countingAnswer = problem.answer;
-        await this.animCtrl.playCountingAnimation(problem.initial, problem.change, problem.isAdd, sceneArea, this.sound);
+        await this.animCtrl.playCountingAnimation(problem, sceneArea, this.sound);
         this.renderer.setHTML('#equationDisplay', `<span style="font-size:1.5rem;">${problem.question}</span>`);
-        const options = OptionGenerator.generate({ correct: problem.answer, maxValue: problem.final + 10, count: 4 });
+        const totalAnimals = problem.finalAnimals.reduce((sum, a) => sum + a.count, 0);
+        const options = OptionGenerator.generate({ correct: problem.answer, maxValue: totalAnimals + 10, count: 4 });
         this.renderOptions(options);
+        this.renderer.setStyle('#btnNewQuiz', { display: 'flex' });
         this.feedback('🤔 看动画，数一数！');
     }
 
@@ -272,12 +275,6 @@ export class UIManager {
         else if (newStars >= 10) mascot.textContent = '🐼';
     }
 
-    resetDemo(): void {
-        this.renderer.setHTML('#fruitDisplay', '👆 点击按钮开始');
-        this.renderer.setHTML('#equationDisplay', '<span>准备开始 🎈</span>');
-    }
-
-    // 公共方法：安全处理“出新题目”按钮点击，自动根据当前模式调用
     public handleNewQuizButton(): void {
         if (this.currentMode === 'quiz') {
             this.startQuiz();
@@ -286,7 +283,6 @@ export class UIManager {
         }
     }
 
-    // 公共方法：生成彩纸效果，避免外部重复创建 ConfettiAnimator
     public spawnConfetti(count: number = 8): void {
         this.confetti.spawn(count);
         this.sound.play('confetti');

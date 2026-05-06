@@ -4,6 +4,7 @@ import { SoundManager } from '../audio/SoundManager';
 import { sleep } from '../utils/helpers';
 import { Equation } from '../core/types';
 import { animalEmojis, fruitEmojis } from '../core/GameConfig';
+import { CountingProblem, CountingAnimal } from '../calculator/CountingGenerator';
 
 type Theme = 'animal' | 'fruit';
 
@@ -30,7 +31,6 @@ export class AnimationController {
     }
 
     async playEquationDemo(eq: Equation, container: HTMLElement, sound: SoundManager, feedback?: (msg: string) => void): Promise<void> {
-        // 清空容器
         container.innerHTML = '';
         const emoji = this.currentEmoji;
         const isAnimal = this.isAnimalTheme();
@@ -71,7 +71,7 @@ export class AnimationController {
                     span.textContent = emoji;
                     container.appendChild(span);
                     sound.play('fruitAppear');
-                    if (isAnimal) AnimalAnimator.walkIn(span); // 可并行播放
+                    if (isAnimal) AnimalAnimator.walkIn(span);
                     else FruitAnimator.bounceIn(span);
                     await sleep(80);
                 }
@@ -105,7 +105,11 @@ export class AnimationController {
                 if (feedback) feedback(`分出了 ${groups} 组，每组 ${eq.b!} 个`);
                 await sleep(500);
             }
-        } // mixed 不演示
+        }else if (eq.type === 'mixed') {
+            // 混合运算演示：直接展示最终结果数量的动物
+            this.renderEmojis(eq.result, container, emoji);
+            await sleep(500);
+        }
 
         await sleep(300);
     }
@@ -128,18 +132,29 @@ export class AnimationController {
         }
     }
 
-    async playCountingAnimation(initial: number, change: number, isAdd: boolean, container: HTMLElement, sound: SoundManager): Promise<void> {
-        const emoji = this.currentEmoji;
+    // 单动物数数（兼容旧逻辑）
+    async playCountingAnimation(problem: CountingProblem, container: HTMLElement, sound: SoundManager): Promise<void> {
+        if (problem.initialAnimals.length === 1) {
+            await this.playSingleAnimalCounting(problem, container, sound);
+        } else {
+            await this.playMultiAnimalCounting(problem, container, sound);
+        }
+    }
+
+    private async playSingleAnimalCounting(problem: CountingProblem, container: HTMLElement, sound: SoundManager): Promise<void> {
+        const init = problem.initialAnimals[0];
+        const change = problem.change;
+        const emoji = init.emoji;
         const isAnimal = this.isAnimalTheme();
         container.innerHTML = '';
-        this.renderEmojis(initial, container, emoji);
+        this.renderEmojis(init.count, container, emoji);
         await sleep(800);
-
-        if (isAdd) {
-            for (let i = 0; i < change; i++) {
+        const delta = change.delta;
+        if (delta > 0) {
+            for (let i = 0; i < delta; i++) {
                 const span = document.createElement('span');
                 span.className = isAnimal ? 'animal-item' : 'fruit-item';
-                span.textContent = emoji;
+                span.textContent = change.emoji;
                 container.appendChild(span);
                 sound.play('fruitAppear');
                 if (isAnimal) await AnimalAnimator.walkIn(span);
@@ -147,8 +162,10 @@ export class AnimationController {
                 await sleep(500);
             }
         } else {
-            for (let i = 0; i < change; i++) {
+            const absDelta = Math.abs(delta);
+            for (let i = 0; i < absDelta; i++) {
                 const items = container.querySelectorAll('.animal-item, .fruit-item');
+                // 移除最后一个匹配的（简单处理，因为只有一种动物）
                 if (items.length > 0) {
                     const last = items[items.length - 1] as HTMLElement;
                     sound.play('fruitDisappear');
@@ -156,6 +173,48 @@ export class AnimationController {
                     else await FruitAnimator.popOut(last);
                     await sleep(600);
                 }
+            }
+        }
+    }
+
+    private async playMultiAnimalCounting(problem: CountingProblem, container: HTMLElement, sound: SoundManager): Promise<void> {
+        container.innerHTML = '';
+        const isAnimal = this.isAnimalTheme();
+        // 渲染初始所有动物（按顺序排列）
+        for (const animal of problem.initialAnimals) {
+            for (let i = 0; i < animal.count; i++) {
+                const span = document.createElement('span');
+                span.className = isAnimal ? 'animal-item' : 'fruit-item';
+                span.textContent = animal.emoji;
+                container.appendChild(span);
+            }
+        }
+        await sleep(800);
+
+        const targetEmoji = problem.change.emoji;
+        const delta = problem.change.delta;
+        if (delta > 0) {
+            for (let i = 0; i < delta; i++) {
+                const span = document.createElement('span');
+                span.className = isAnimal ? 'animal-item' : 'fruit-item';
+                span.textContent = targetEmoji;
+                container.appendChild(span);
+                sound.play('fruitAppear');
+                if (isAnimal) await AnimalAnimator.walkIn(span);
+                else await FruitAnimator.bounceIn(span);
+                await sleep(500);
+            }
+        } else {
+            const absDelta = Math.abs(delta);
+            // 找出页面中所有该动物的元素，从后往前移除
+            const allItems = Array.from(container.querySelectorAll('.animal-item, .fruit-item'))
+                .filter(el => el.textContent === targetEmoji);
+            for (let i = 0; i < Math.min(absDelta, allItems.length); i++) {
+                const item = allItems[allItems.length - 1 - i] as HTMLElement;
+                sound.play('fruitDisappear');
+                if (isAnimal) await AnimalAnimator.walkOut(item);
+                else await FruitAnimator.popOut(item);
+                await sleep(600);
             }
         }
     }

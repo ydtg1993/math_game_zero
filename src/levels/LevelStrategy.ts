@@ -14,4 +14,7 @@ export interface LevelStrategy {
 
     /** 生成数数问题时需要的数值上限 */
     getCountingMax(): number;
+
+    /** 可选：提供数数模式使用的动物表情数组，返回 undefined 表示使用单动物随机 */
+    getCountingEmojis?(): string[];
 }
